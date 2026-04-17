@@ -12,10 +12,10 @@
   body{font-family:'Barlow',sans-serif;background:#eef1f7;color:var(--text);min-height:100vh;padding-bottom:80px}
 
   header{background:var(--blue);color:white;padding:14px 16px 11px;position:sticky;top:0;z-index:100;box-shadow:0 3px 12px rgba(0,0,0,.25)}
-  .top-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .top-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;overflow:hidden}
   header h1{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;line-height:1.2}
   .subtitle{font-size:11px;opacity:.65;margin-top:2px}
-  .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+  .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;max-width:65%}
   .progress-pill{background:var(--orange);color:white;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;padding:4px 12px;border-radius:20px;white-space:nowrap}
   .machine-counter{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:white;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px;white-space:nowrap}
   .progress-bar-wrap{margin-top:9px;background:rgba(255,255,255,.2);border-radius:4px;height:5px;overflow:hidden}
@@ -402,9 +402,8 @@
     </div>
     <div class="header-right">
       <div class="progress-pill" id="progressPill">0 / 0</div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <div class="machine-counter" id="machineCounter">Máquina 1 de 1</div>
-        <div class="machine-counter" id="buildBadge" title="Versão do arquivo">Build v8.4.1</div>
         <div class="gs-pill-pgp" id="gsPill" onclick="abrirConfig()">
           <div class="gs-dot-pgp off" id="gsDotPgp"></div>
           <span id="gsTextPgp">Sheets</span>
@@ -2343,10 +2342,23 @@ function autoSaveSession() {
     
     let sessions = getSessions();
     if (_editingSessionIndex >= 0 && _editingSessionIndex < sessions.length) {
+      // Atualiza sessão existente sendo editada
       sessions[_editingSessionIndex] = state;
     } else {
-      sessions.unshift(state);
-      if (sessions.length > 10) sessions = sessions.slice(0, 10);
+      // Verifica se já existe auto-save recente do mesmo cliente (últimos 2 min)
+      const now = Date.now();
+      const existIdx = sessions.findIndex(s =>
+        s.label === state.label &&
+        s.label !== '—' &&
+        s._autoTs && (now - s._autoTs) < 120000
+      );
+      state._autoTs = now;
+      if (existIdx >= 0) {
+        sessions[existIdx] = state; // Atualiza em vez de duplicar
+      } else {
+        sessions.unshift(state);
+        if (sessions.length > 10) sessions = sessions.slice(0, 10);
+      }
     }
     persistSessions(sessions);
   }, 30000); // Auto-save a cada 30 segundos
@@ -3077,6 +3089,24 @@ async function gerarPDF() {
 // ══════════════════════════════════════════════════════════
 // INTEGRAÇÃO PGP v8 — GAS + localStorage Admin
 // ══════════════════════════════════════════════════════════
+
+// ── MACHINE KEY — identificador determinístico ────────────────────────────
+function pgpMachineKey(client, brand, model, serial){
+  const norm = v => String(v||'').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]/g,'');
+  const parts = [norm(client), norm(brand), norm(model)];
+  const ser = norm(serial);
+  if(ser) parts.push(ser);
+  return 'MK-' + parts.join('-');
+}
+// ─────────────────────────────────────────────────────────────────────────
+
+// ── AUTH ──────────────────────────────────────────────────────────────────
+const _AUTH_KEY  = 'proper_auth_ok';
+const _AUTH_HASH = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92';
+// ──────────────────────────────────────────────────────────────────────────
+
 let _pgpGsUrl = localStorage.getItem('proper_gs_url') || '';
 let _pgpGsConnected = false;
 let _pgpLoadedMachine = null;
@@ -3609,9 +3639,7 @@ function pgpMachineKey(client, brand, model, serial){
 }
 // ─────────────────────────────────────────────────────────────────────────
 
-// ── AUTH ──────────────────────────────────────────────────
-const _AUTH_KEY = 'proper_auth_ok';
-const _AUTH_HASH = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'; // sha256 de 123456
+// ── AUTH (definido no topo do bloco PGP) ──────────────
 
 async function loginHash(str){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
