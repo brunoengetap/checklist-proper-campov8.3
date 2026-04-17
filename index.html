@@ -3306,9 +3306,10 @@ function pgpOnInput(){
   const q=document.getElementById('pgpSearchInput').value.trim().toLowerCase();
   if(q.length<2){pgpHideAc();return;}
   const seen=new Set();
+  const normInput = v => String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const matches=pgpGetLocalMachines().filter(m=>{
-    const fields=[(m.serial||''),(m.tag||''),(m.client||''),(m.model||'')].map(v=>v.toLowerCase());
-    const key=m.serial||m.tag||m.id;
+    const fields=[m.serial,m.tag,m.client,m.model,m.brand,m.id].map(normInput);
+    const key=m.id||m.serial||m.tag;
     return fields.some(f=>f.includes(q))&&!seen.has(key)&&seen.add(key);
   }).slice(0,8);
   if(!matches.length){pgpHideAc();return;}
@@ -3336,10 +3337,15 @@ async function pgpDoSearch(){
   let localDb=null;
   try{localDb=JSON.parse(localStorage.getItem('proper_admin_v2'));}catch(e){}
 
+  // Normalizar query para busca
+  const normQ = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const normVal = v => String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   let found=localDb?.machines?.find(m=>
-    (m.serial||'').toLowerCase()===q.toLowerCase()||
-    (m.tag||'').toLowerCase()===q.toLowerCase()||
-    (m.client||'').toLowerCase().includes(q.toLowerCase())
+    normVal(m.serial)===normQ||
+    normVal(m.tag)===normQ||
+    normVal(m.id)===normQ||
+    normVal(m.client).includes(normQ)||
+    normVal(m.brand+' '+m.model).includes(normQ)
   );
 
   if(!found&&_pgpGsConnected){
@@ -3413,7 +3419,7 @@ function pgpRegisterNew(){
   const model =document.getElementById('nm_model').value.trim();
   if(!client||!brand||!model){showNotification('⚠ Informe cliente, marca e modelo');return;}
   const eq={
-    id:'EQ-'+Date.now(),client,brand,model,
+    id:pgpMachineKey(client,brand,model,document.getElementById('nm_serial').value.trim()),client,brand,model,
     serial: document.getElementById('nm_serial').value.trim(),
     tag:    document.getElementById('nm_tag').value.trim(),
     location:document.getElementById('nm_location').value.trim(),
@@ -3467,7 +3473,12 @@ function pgpBuildPayload(){
     parts[aid]={name:PART_NAME_MAP[pt.k]||pt.k,lastChange:Math.max(0,lastChange),interval,ref:refEl?.value.trim()||'',obs:obsEl?.value.trim()||'',na:isNA};
   });
   return{
-    machine_id:_pgpLoadedMachine?.id||'',client:gv('razao_social'),branch:gv('filial'),
+    machine_id:(()=>{
+      if(_pgpLoadedMachine?.id) return _pgpLoadedMachine.id;
+      // Gerar chave determinística quando não há máquina carregada do banco
+      return pgpMachineKey(gv('razao_social'),gv('marca'),gv('modelo'),gv('ns'));
+    })(),
+    client:gv('razao_social'),branch:gv('filial'),
     brand:gv('marca'),model:gv('modelo'),serial:gv('ns'),tag:gv('tag'),
     location:gv('localizacao'),tech:gv('tecnico'),hourTotal,hpw,
     visitDate:new Date().toISOString(),
@@ -3582,6 +3593,21 @@ function pgpUpdateAdminLocal(payload){
 })();
 
 
+
+
+// ── MACHINE KEY — identificador determinístico ────────────────────────────
+// Gerado a partir de cliente+marca+modelo+serie (serie opcional)
+// Garante que a mesma máquina sempre recebe o mesmo ID, em qualquer dispositivo
+function pgpMachineKey(client, brand, model, serial){
+  const norm = v => String(v||'').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')  // remove acentos
+    .replace(/[^a-z0-9]/g,'');                         // só alfanumérico
+  const parts = [norm(client), norm(brand), norm(model)];
+  const ser = norm(serial);
+  if(ser) parts.push(ser);
+  return 'MK-' + parts.join('-');
+}
+// ─────────────────────────────────────────────────────────────────────────
 
 // ── AUTH ──────────────────────────────────────────────────
 const _AUTH_KEY = 'proper_auth_ok';
