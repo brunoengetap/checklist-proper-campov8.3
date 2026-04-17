@@ -3140,7 +3140,7 @@ function pgpUpdatePendingBadge(){
 async function pgpPostJson(action, body){
   const r = await fetch(_pgpGsUrl,{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    
     body:JSON.stringify({action, ...body})
   });
   if(!r.ok) throw new Error(`HTTP ${r.status}`);
