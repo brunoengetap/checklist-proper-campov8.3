@@ -363,9 +363,36 @@
   .cfg-btn-cancel{flex:1;background:var(--gray);color:var(--text-light);border:1.5px solid var(--gray-mid);border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase}
   .cfg-test-result{font-size:11px;color:var(--text-light);min-height:16px;margin-bottom:8px}
 
+
+  /* ── LOGIN SCREEN ── */
+  .login-overlay{display:flex;position:fixed;inset:0;background:#1a3a6b;z-index:9999;align-items:center;justify-content:center;padding:24px;flex-direction:column}
+  .login-overlay.hidden{display:none}
+  .login-box{background:white;border-radius:20px;padding:32px 24px;width:100%;max-width:340px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.35)}
+  .login-logo{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+  .login-sub{font-size:12px;color:var(--text-light);margin-bottom:28px}
+  .login-label{font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;text-align:left;display:block;margin-bottom:5px}
+  .login-input{width:100%;border:2px solid var(--gray-mid);border-radius:10px;padding:13px 14px;font-family:'Barlow',sans-serif;font-size:20px;color:var(--text);background:var(--gray);outline:none;transition:border-color .2s;letter-spacing:4px;margin-bottom:10px}
+  .login-input:focus{border-color:var(--blue-mid);background:white}
+  .login-btn{width:100%;background:var(--blue);color:white;border:none;border-radius:10px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;text-transform:uppercase;cursor:pointer;letter-spacing:.5px;transition:opacity .15s}
+  .login-btn:active{opacity:.85}
+  .login-error{font-size:12px;color:var(--red);font-weight:600;min-height:18px;margin-top:8px}
 </style>
 </head>
 <body>
+
+
+<!-- ── TELA DE LOGIN ── -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <div class="login-logo">⚙ Proper</div>
+    <div class="login-sub">Checklist de Campo · v8.4.1</div>
+    <label class="login-label">Senha de acesso</label>
+    <input class="login-input" type="password" id="loginInput" placeholder="••••••"
+           maxlength="20" onkeydown="if(event.key==='Enter')loginEntrar()">
+    <button class="login-btn" onclick="loginEntrar()">Entrar</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
 
 <header>
   <div class="top-row">
@@ -3143,7 +3170,7 @@ async function pgpPostJson(action, body){
   // Sem Content-Type: evita preflight CORS (Apps Script não responde OPTIONS)
   const r = await fetch(_pgpGsUrl,{
     method:'POST',
-    body:JSON.stringify({action, ...body})
+    body:JSON.stringify({action, key:_AUTH_HASH, ...body})
   });
   if(!r.ok) throw new Error(`HTTP ${r.status}`);
   const txt = await r.text();
@@ -3316,7 +3343,7 @@ async function pgpDoSearch(){
   );
 
   if(!found&&_pgpGsConnected){
-    try{const r=await fetch(_pgpGsUrl+'?action=searchMachine&q='+encodeURIComponent(q));const d=await r.json();if(d.status==='ok'&&d.machine)found=d.machine;}catch(e){}
+    try{const r=await fetch(_pgpGsUrl+'?action=searchMachine&q='+encodeURIComponent(q)+'&key='+_AUTH_HASH);const d=await r.json();if(d.status==='ok'&&d.machine)found=d.machine;}catch(e){}
   }
 
   if(found){
@@ -3400,7 +3427,7 @@ function pgpRegisterNew(){
 
   // Enviar ao GAS ou enfileirar para reenvio
   if(_pgpGsConnected&&_pgpGsUrl){
-    fetch(_pgpGsUrl,{method:'POST',body:JSON.stringify({action:'saveMachine',machine:eq})})
+    fetch(_pgpGsUrl,{method:'POST',body:JSON.stringify({action:'saveMachine',key:_AUTH_HASH,machine:eq})})
       .catch(()=>{ pgpAddPending('machine', eq); });
   } else {
     pgpAddPending('machine', eq);
@@ -3553,6 +3580,41 @@ function pgpUpdateAdminLocal(payload){
   if(_pgpGsUrl) await pgpTestGs();
   pgpUpdateGsStatusDisplay();
 })();
+
+
+
+// ── AUTH ──────────────────────────────────────────────────
+const _AUTH_KEY = 'proper_auth_ok';
+const _AUTH_HASH = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'; // sha256 de 123456
+
+async function loginHash(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function loginEntrar(){
+  const val = document.getElementById('loginInput').value;
+  const hash = await loginHash(val);
+  if(hash === _AUTH_HASH){
+    sessionStorage.setItem(_AUTH_KEY,'1');
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('loginError').textContent='';
+  } else {
+    document.getElementById('loginError').textContent='Senha incorreta. Tente novamente.';
+    document.getElementById('loginInput').value='';
+    document.getElementById('loginInput').focus();
+  }
+}
+
+(async function loginCheck(){
+  if(sessionStorage.getItem(_AUTH_KEY)!=='1'){
+    document.getElementById('loginOverlay').classList.remove('hidden');
+    setTimeout(()=>document.getElementById('loginInput').focus(),300);
+  } else {
+    document.getElementById('loginOverlay').classList.add('hidden');
+  }
+})();
+// ── END AUTH ──────────────────────────────────────────────
 
 </script>
 
