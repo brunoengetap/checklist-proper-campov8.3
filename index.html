@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Proper · Checklist de Campo v8.3</title>
+<title>Proper · Checklist de Campo v8.4.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
@@ -371,12 +371,13 @@
   <div class="top-row">
     <div>
       <h1>📋 Coleta de Dados</h1>
-      <div class="subtitle">PGP Preventiva · v8.3</div>
+      <div class="subtitle">PGP Preventiva · v8.4.1</div>
     </div>
     <div class="header-right">
       <div class="progress-pill" id="progressPill">0 / 0</div>
       <div style="display:flex;gap:6px;align-items:center">
         <div class="machine-counter" id="machineCounter">Máquina 1 de 1</div>
+        <div class="machine-counter" id="buildBadge" title="Versão do arquivo">Build v8.4.1</div>
         <div class="gs-pill-pgp" id="gsPill" onclick="abrirConfig()">
           <div class="gs-dot-pgp off" id="gsDotPgp"></div>
           <span id="gsTextPgp">Sheets</span>
@@ -667,6 +668,7 @@ const PHOTOS = [
 
 let machines = [];
 let currentMachine = 0;
+const APP_VERSION = 'v8.4.1';
 
 // ── HELPERS TURNO ──────────────────────────────────────
 function buildTurnoRow(p, tIdx, midx) {
@@ -3138,14 +3140,16 @@ function pgpUpdatePendingBadge(){
 }
 
 async function pgpPostJson(action, body){
+  // Sem Content-Type: evita preflight CORS (Apps Script não responde OPTIONS)
   const r = await fetch(_pgpGsUrl,{
     method:'POST',
-    
     body:JSON.stringify({action, ...body})
   });
   if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  const txt = await r.text();
+  if(txt.trim().startsWith('<')) throw new Error('Apps Script retornou HTML — verifique a publicação (Qualquer pessoa, sem login)');
   let d = null;
-  try{ d = await r.json(); }catch(e){ throw new Error('Resposta inválida do Apps Script'); }
+  try{ d = JSON.parse(txt); }catch(e){ throw new Error('Resposta inválida do Apps Script'); }
   if(!d || d.status!=='ok') throw new Error((d && d.error) || `Falha em ${action}`);
   return d;
 }
@@ -3205,11 +3209,17 @@ async function pgpTestGs(){
   if(!_pgpGsUrl){pgpSetGsStatus('off');return false;}
   pgpSetGsStatus('sync');
   try{
-    const r=await fetch(_pgpGsUrl+'?action=ping');
-    const d=await r.json();
+    const r=await fetch(_pgpGsUrl+'?action=ping',{method:'GET'});
+    const txt=await r.text();
+    // Apps Script mal configurado retorna HTML de login — detectar antes de parsear
+    if(txt.trim().startsWith('<')){
+      console.warn('GS ping: resposta HTML — publique o Web App para "Qualquer pessoa, sem necessidade de login"');
+      pgpSetGsStatus('off');return false;
+    }
+    const d=JSON.parse(txt);
     if(d.status==='ok'){pgpSetGsStatus('ok');return true;}
-    throw new Error();
-  }catch(e){pgpSetGsStatus('off');return false;}
+    throw new Error(d.error||'resposta inesperada');
+  }catch(e){console.warn('pgpTestGs:',e.message);pgpSetGsStatus('off');return false;}
 }
 
 function pgpUpdateGsStatusDisplay(){
