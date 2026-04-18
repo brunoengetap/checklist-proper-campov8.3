@@ -385,7 +385,7 @@
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
     <div class="login-logo">⚙ Proper</div>
-    <div class="login-sub">Checklist de Campo · v8.4.1</div>
+    <div class="login-sub">Checklist de Campo · v8.4.2</div>
     <label class="login-label">Senha de acesso</label>
     <input class="login-input" type="password" id="loginInput" placeholder="••••••"
            maxlength="20" onkeydown="if(event.key==='Enter')loginEntrar()">
@@ -398,7 +398,7 @@
   <div class="top-row">
     <div>
       <h1>📋 Coleta de Dados</h1>
-      <div class="subtitle">PGP Preventiva · v8.4.1</div>
+      <div class="subtitle">PGP Preventiva · v8.4.2</div>
     </div>
     <div class="header-right">
       <div class="progress-pill" id="progressPill">0 / 0</div>
@@ -694,7 +694,39 @@ const PHOTOS = [
 
 let machines = [];
 let currentMachine = 0;
-const APP_VERSION = 'v8.4.1';
+const APP_VERSION = 'v8.4.2';
+
+function normSessionKey(v) {
+  return String(v || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function buildMachineSignatureFromValues(midx) {
+  const client = normSessionKey(vg(midx, 'razao_social'));
+  const brand  = normSessionKey(vg(midx, 'marca'));
+  const model  = normSessionKey(vg(midx, 'modelo'));
+  const serial = normSessionKey(vg(midx, 'ns'));
+  const tag    = normSessionKey(vg(midx, 'tag'));
+  return [client, brand, model, serial || tag].join('|');
+}
+
+function buildStateMachineSignatures(state) {
+  const f = state.fields || {};
+  const count = state.machineCount || 1;
+  const sigs = [];
+  for (let i = 0; i < count; i++) {
+    const client = normSessionKey(f[`m${i}_razao_social`] || '');
+    const brand  = normSessionKey(f[`m${i}_marca`] || '');
+    const model  = normSessionKey(f[`m${i}_modelo`] || '');
+    const serial = normSessionKey(f[`m${i}_ns`] || '');
+    const tag    = normSessionKey(f[`m${i}_tag`] || '');
+    sigs.push([client, brand, model, serial || tag].join('|'));
+  }
+  return sigs;
+}
 
 // ── HELPERS TURNO ──────────────────────────────────────
 function buildTurnoRow(p, tIdx, midx) {
@@ -1079,7 +1111,7 @@ function buildPanelHTML(idx) {
             <div class="sub-group"><label>Última visita</label><input type="date" data-key="${p}ult_visita" onclick="event.stopPropagation()"></div>
             <div class="sub-group"><label>Próxima visita</label><input type="date" data-key="${p}prox_visita" onclick="event.stopPropagation()"></div>
           </div>
-          <input type="text" placeholder="Filial / Unidade (se houver)" data-key="${p}filial" onclick="event.stopPropagation()">
+          <div class="sub-group"><label>Filial / Unidade</label><input type="text" placeholder="Filial / Unidade (se houver)" data-key="${p}filial" onclick="event.stopPropagation()"></div>
         </div>
       </div>
     </div>
@@ -1104,7 +1136,7 @@ function buildPanelHTML(idx) {
             <div class="sub-group"><label>Nº Série</label><input type="text" placeholder="S/N plaqueta" data-key="${p}ns" onclick="event.stopPropagation()"></div>
             <div class="sub-group"><label>Ano</label><input type="number" placeholder="2018" data-key="${p}ano" onclick="event.stopPropagation()"></div>
           </div>
-          <input type="text" placeholder="Potência (ex: 15 kW / 20 HP)" data-key="${p}potencia" onclick="event.stopPropagation()">
+          <div class="sub-group"><label>Potência</label><input type="text" placeholder="Potência (ex: 15 kW / 20 HP)" data-key="${p}potencia" onclick="event.stopPropagation()"></div>
         </div>
       </div>
       <div class="field-item" onclick="toggleField(this,${idx})">
@@ -1125,8 +1157,8 @@ function buildPanelHTML(idx) {
           <div class="label-text"><div class="label-main">Localização e TAG</div>
           <div class="label-hint">Onde está instalada e código do cliente</div></div></div>
         <div class="field-input">
-          <input type="text" placeholder="Local de instalação (ex: Casa de compressores)" data-key="${p}localizacao" onclick="event.stopPropagation()">
-          <input type="text" placeholder="TAG (ex: COMP-01) — se houver" data-key="${p}tag" onclick="event.stopPropagation()">
+          <div class="sub-group"><label>Localização</label><input type="text" placeholder="Local de instalação (ex: Casa de compressores)" data-key="${p}localizacao" onclick="event.stopPropagation()"></div>
+          <div class="sub-group"><label>TAG / Matrícula</label><input type="text" placeholder="TAG (ex: COMP-01) — se houver" data-key="${p}tag" onclick="event.stopPropagation()"></div>
           <button class="btn-foto-inline" id="${p}btn_foto_local" data-done-label="✅ Local ok"
                   onclick="event.stopPropagation();abrirFotoPicker(this,'linked',${idx},'geral')">📷 Foto do local de instalação</button>
         </div>
@@ -2256,6 +2288,9 @@ function captureState() {
     if (btn.id) state.naButtons[btn.id] = btn.classList.contains('active');
   });
 
+  state.machineSignatures = buildStateMachineSignatures(state);
+  state.sessionSignature = (state.machineSignatures || []).join('||');
+
   return state;
 }
 
@@ -2334,34 +2369,38 @@ function autoSaveSession() {
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(() => {
     if (!temDadosPreenchidos()) return;
-    // Salva automaticamente a cada 30 segundos se houver dados
     const state = captureState();
     state.clientName = vg(0, 'razao_social');
     state.label = state.clientName !== '—' ? state.clientName : 'Auto-salvamento';
     state.date = new Date().toLocaleDateString('pt-BR');
-    
+    if (!_currentSessionId) _currentSessionId = 'ses-' + Date.now();
+    state.sessionId = _currentSessionId;
+
     let sessions = getSessions();
+
     if (_editingSessionIndex >= 0 && _editingSessionIndex < sessions.length) {
-      // Atualiza sessão existente sendo editada
       sessions[_editingSessionIndex] = state;
     } else {
-      // Verifica se já existe auto-save recente do mesmo cliente (últimos 2 min)
-      const now = Date.now();
-      const existIdx = sessions.findIndex(s =>
-        s.label === state.label &&
-        s.label !== '—' &&
-        s._autoTs && (now - s._autoTs) < 120000
+      const existingIdxById = sessions.findIndex(s => s.sessionId === _currentSessionId);
+      const existingIdxBySignature = sessions.findIndex(s =>
+        s.sessionSignature &&
+        state.sessionSignature &&
+        s.sessionSignature === state.sessionSignature
       );
-      state._autoTs = now;
-      if (existIdx >= 0) {
-        sessions[existIdx] = state; // Atualiza em vez de duplicar
+
+      if (existingIdxById >= 0) {
+        sessions[existingIdxById] = state;
+      } else if (existingIdxBySignature >= 0) {
+        state.sessionId = sessions[existingIdxBySignature].sessionId || state.sessionId;
+        _currentSessionId = state.sessionId;
+        sessions[existingIdxBySignature] = state;
       } else {
         sessions.unshift(state);
         if (sessions.length > 10) sessions = sessions.slice(0, 10);
       }
     }
     persistSessions(sessions);
-  }, 30000); // Auto-save a cada 30 segundos
+  }, 30000);
 }
 
 function getSessions() {
@@ -2385,21 +2424,30 @@ function saveCurrentSession() {
   state.label = state.clientName !== '—' ? state.clientName : 'Sem nome';
   state.date = new Date().toLocaleDateString('pt-BR');
 
-  // Gerar ID único para esta coleta se ainda não tiver
   if (!_currentSessionId) _currentSessionId = 'ses-' + Date.now();
   state.sessionId = _currentSessionId;
 
   let sessions = getSessions();
 
-  // Se estamos editando uma sessão restaurada, atualiza por cima
   if (_editingSessionIndex >= 0 && _editingSessionIndex < sessions.length) {
     sessions[_editingSessionIndex] = state;
     _editingSessionIndex = -1;
   } else {
-    // Verificar se já existe sessão com mesmo ID (evita duplicata ao abrir resumo 2x)
-    const existingIdx = sessions.findIndex(s => s.sessionId === _currentSessionId);
-    if (existingIdx >= 0) {
-      sessions[existingIdx] = state; // atualizar a existente
+    const existingIdxById = sessions.findIndex(s => s.sessionId === _currentSessionId);
+    const existingIdxBySignature = sessions.findIndex(s =>
+      s.sessionSignature &&
+      state.sessionSignature &&
+      s.sessionSignature === state.sessionSignature
+    );
+
+    if (existingIdxById >= 0) {
+      sessions[existingIdxById] = state;
+    } else if (existingIdxBySignature >= 0) {
+      const overwrite = confirm('Já existe uma coleta salva para esta mesma máquina deste cliente. Deseja sobrescrever a anterior?');
+      if (!overwrite) return;
+      state.sessionId = sessions[existingIdxBySignature].sessionId || state.sessionId;
+      _currentSessionId = state.sessionId;
+      sessions[existingIdxBySignature] = state;
     } else {
       sessions.unshift(state);
       if (sessions.length > 10) sessions = sessions.slice(0, 10);
@@ -2463,7 +2511,7 @@ function renderSessoesList() {
     <div class="session-card">
       <div class="session-card-info">
         <div class="session-card-name">${s.label || s.clientName || '—'}</div>
-        <div class="session-card-meta">${s.date || ''}${s.machineCount > 1 ? ' · ' + s.machineCount + ' máquinas' : ' · 1 máquina'}</div>
+        <div class="session-card-meta">${s.date || ''}${s.machineCount > 1 ? ' · ' + s.machineCount + ' máquinas' : ' · 1 máquina'}${(s.fields && (s.fields['m0_marca'] || s.fields['m0_modelo'] || s.fields['m0_ns'])) ? ' · ' + [s.fields['m0_marca'], s.fields['m0_modelo'], s.fields['m0_ns']].filter(Boolean).join(' / ') : ''}</div>
       </div>
       <div class="session-card-actions">
         <button class="btn-session-restore" onclick="restaurarSessao(${i})">↩ Restaurar</button>
@@ -2481,6 +2529,7 @@ function restaurarSessao(idx) {
   createPanel(0);
   restoreState(sessions[idx]);
   _editingSessionIndex = idx; // Rastreia que estamos editando a sessão no índice idx
+  _currentSessionId = sessions[idx].sessionId || null;
   fecharSessoes();
 }
 
