@@ -393,8 +393,12 @@
   /* ── ETAPA 5 — REGISTRAR PREVENTIVA ── */
   .pgp-tipo-btn{flex:1;padding:10px 8px;border:1.5px solid var(--gray-mid);border-radius:8px;background:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s}
   .pgp-tipo-btn-active{background:var(--blue);color:white;border-color:var(--blue)}
-  .pgp-acao-col{min-width:110px}
-  .pgp-acao-sel{width:100%;font-size:12px;padding:4px 6px;border:1px solid var(--gray-mid);border-radius:6px;background:#fff;font-family:inherit}
+  .pgp-acao-wrap{margin-bottom:10px}
+  .pgp-acao-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--blue);display:block;margin-bottom:6px}
+  .pgp-acao-pill{flex:1;padding:10px 4px;border:1.5px solid var(--gray-mid);border-radius:8px;background:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s;min-height:44px}
+  .pgp-acao-pill[id$="_acao_conferida"].active{background:var(--green);border-color:var(--green);color:white}
+  .pgp-acao-pill[id$="_acao_trocada"].active{background:var(--blue);border-color:var(--blue);color:white}
+  .pgp-acao-pill[id$="_acao_na"].active{background:var(--purple);border-color:var(--purple);color:white}
   .pgp-prev-actions{padding:10px 12px 0;display:flex;gap:10px}
   .btn-preventiva{flex:1;background:var(--blue);color:white;border:none;border-radius:10px;padding:14px 12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px}
 
@@ -585,6 +589,8 @@
   Toque em cada item para expandir e preencher. Marque como coletado. Use <b>N/A</b> nas peças que não se aplicam. Para múltiplas máquinas no mesmo cliente, use <b>+ Máquina</b> (dados do cliente copiam automaticamente).
 </div>
 
+<div class="content" id="machineContent"></div>
+
 <div id="pgpTipoVisitaWrap" style="padding:10px 12px 0">
   <div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Tipo de visita</div>
   <div style="display:flex;gap:8px">
@@ -604,8 +610,6 @@
     Inspeção: coleta dados e gera relatório.
   </div>
 </div>
-
-<div class="content" id="machineContent"></div>
 
 <div class="actions">
   <button class="btn btn-reset" onclick="resetCurrent()">↺ Limpar</button>
@@ -3816,6 +3820,17 @@ function pgpClientSearchFallback(){
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── ETAPA 5 — REGISTRAR PREVENTIVA ───────────────────────────────────────────
+
+function pgpSetAcao(pk, acao){
+  // Atualizar input hidden (lido por pgpBuildPreventivaPayload)
+  const hidden=document.getElementById(pk+'_acao');
+  if(hidden) hidden.value=acao;
+  // Atualizar visual dos botões
+  ['conferida','trocada','na'].forEach(a=>{
+    const btn=document.getElementById(pk+'_acao_'+a);
+    if(btn) btn.classList.toggle('active', a===acao);
+  });
+}
 
 function pgpSetTipoVisita(tipo){
   _pgpTipoVisita=tipo;
