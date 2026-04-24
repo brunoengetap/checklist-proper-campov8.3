@@ -390,6 +390,14 @@
   .pgp-machine-card-new{background:#fff7ed;border:1.5px dashed var(--orange);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--orange);font-size:13px;font-weight:700;text-align:center}
   .pgp-link-btn{background:none;border:none;cursor:pointer;font-size:12px;color:var(--blue-mid);padding:2px 0;font-family:inherit;text-decoration:underline}
 
+  /* ── ETAPA 5 — REGISTRAR PREVENTIVA ── */
+  .pgp-tipo-btn{flex:1;padding:10px 8px;border:1.5px solid var(--gray-mid);border-radius:8px;background:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s}
+  .pgp-tipo-btn-active{background:var(--blue);color:white;border-color:var(--blue)}
+  .pgp-acao-col{min-width:110px}
+  .pgp-acao-sel{width:100%;font-size:12px;padding:4px 6px;border:1px solid var(--gray-mid);border-radius:6px;background:#fff;font-family:inherit}
+  .pgp-prev-actions{padding:10px 12px 0;display:flex;gap:10px}
+  .btn-preventiva{flex:1;background:var(--blue);color:white;border:none;border-radius:10px;padding:14px 12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px}
+
   /* ── GS STATUS ── */
   .gs-pill-pgp{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.75);font-size:10px;font-family:'Barlow Condensed',sans-serif;padding:3px 8px;border-radius:14px;cursor:pointer;white-space:nowrap}
   .gs-dot-pgp{width:6px;height:6px;border-radius:50%;background:#6ee7b7;flex-shrink:0}
@@ -579,6 +587,26 @@
 
 <div class="content" id="machineContent"></div>
 
+<div id="pgpTipoVisitaWrap" style="padding:10px 12px 0">
+  <div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Tipo de visita</div>
+  <div style="display:flex;gap:8px">
+    <button id="btnTipoInspecao"
+            class="pgp-tipo-btn pgp-tipo-btn-active"
+            onclick="pgpSetTipoVisita('inspecao')">
+      🔍 Inspeção
+    </button>
+    <button id="btnTipoPreventiva"
+            class="pgp-tipo-btn"
+            onclick="pgpSetTipoVisita('preventiva')">
+      🔧 Preventiva
+    </button>
+  </div>
+  <div id="pgpTipoHint"
+       style="font-size:11px;color:var(--text-light);margin-top:5px">
+    Inspeção: coleta dados e gera relatório.
+  </div>
+</div>
+
 <div class="actions">
   <button class="btn btn-reset" onclick="resetCurrent()">↺ Limpar</button>
   <button class="btn btn-done" id="btnDone" onclick="gerarResumo()">Gerar Resumo 📲</button>
@@ -586,6 +614,12 @@
 <div class="actions" style="padding-top:6px">
   <button class="btn btn-reset" onclick="salvarColeta()" style="background:var(--blue);color:white;border-color:var(--blue)">💾 Salvar Coleta</button>
   <button class="btn btn-reset" onclick="gerarPDF()" style="background:#c0392b;color:white;border-color:#c0392b;flex:none;padding:12px 18px;font-size:14px">📄 Gerar PDF</button>
+</div>
+
+<div id="pgpPrevActionsWrap" class="pgp-prev-actions" style="display:none">
+  <button class="btn-preventiva" onclick="pgpEnviarPreventiva()">
+    🔧 Registrar Preventiva
+  </button>
 </div>
 
 <div class="modal-overlay" id="modalOverlay" onclick="fecharModal(event)">
@@ -928,6 +962,14 @@ function buildPartsTable(p, midx, scenario) {
       <td class="pt-name">${pt.label}<small>Padrão: ${pt.intDefault}h</small>${hiddenFields}</td>
       ${mainCell}
       ${extraCols}
+      <td class="pgp-acao-col" style="display:none">
+        <select class="pgp-acao-sel" id="${pk}_acao" onclick="event.stopPropagation()">
+          <option value="">—</option>
+          <option value="conferida">Conferida</option>
+          <option value="trocada">Trocada</option>
+          <option value="na">N/A</option>
+        </select>
+      </td>
       <td class="td-na"><button class="btn-pt-na" id="${pk}_na" onclick="togglePtNA('${pk}',event)">N/A</button></td>
       <td class="td-detail"><button class="btn-pt-detail" id="${pk}_detail_btn" onclick="togglePartDetail('${pk}',${pt.intDefault},event)">▸</button></td>
     </tr>
@@ -1000,6 +1042,7 @@ function buildPartsTable(p, midx, scenario) {
     <thead><tr>
       <th>${cfg.heads[0]}</th>
       ${thExtra}
+      <th class="pgp-acao-col th-center" style="display:none">Ação</th>
       <th class="th-center">N/A</th>
       <th class="th-center">▸</th>
     </tr></thead>
@@ -3244,6 +3287,7 @@ const _AUTH_HASH = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc
 let _pgpGsUrl = localStorage.getItem('proper_gs_url') || '';
 let _pgpGsConnected = false;
 let _pgpLoadedMachine = null;
+let _pgpTipoVisita = 'inspecao'; // 'inspecao' | 'preventiva'
 
 // ── FILA DE PENDÊNCIAS ────────────────────────────────────
 // Armazena payloads que falharam para reenviar quando reconectar
@@ -3764,6 +3808,177 @@ function pgpClientSearchFallback(){
   document.getElementById('pgpStep1').style.display='none';
   document.getElementById('pgpStepFallback').style.display='';
   document.getElementById('pgpSearchInput').focus();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── ETAPA 5 — REGISTRAR PREVENTIVA ───────────────────────────────────────────
+
+function pgpSetTipoVisita(tipo){
+  _pgpTipoVisita=tipo;
+
+  document.getElementById('btnTipoInspecao')
+    .classList.toggle('pgp-tipo-btn-active', tipo==='inspecao');
+  document.getElementById('btnTipoPreventiva')
+    .classList.toggle('pgp-tipo-btn-active', tipo==='preventiva');
+
+  const hint=document.getElementById('pgpTipoHint');
+  if(hint) hint.textContent=tipo==='preventiva'
+    ?'Preventiva: registra peças trocadas e atualiza histórico.'
+    :'Inspeção: coleta dados e gera relatório.';
+
+  document.querySelectorAll('.pgp-acao-col').forEach(el=>{
+    el.style.display=tipo==='preventiva'?'':'none';
+  });
+
+  const prevWrap=document.getElementById('pgpPrevActionsWrap');
+  if(prevWrap) prevWrap.style.display=tipo==='preventiva'?'':'none';
+}
+
+function pgpBuildPreventivaPayload(){
+  const base=pgpBuildPayload();
+  const p='m0_';
+
+  const parts={};
+  PARTS.forEach(pt=>{
+    const pk=p+pt.k;
+    const aid=PART_ID_MAP[pt.k];
+    if(!aid) return;
+
+    const acaoEl=document.getElementById(pk+'_acao');
+    const acao=acaoEl?acaoEl.value:'';
+    const refEl=document.getElementById(pk+'_ref');
+    const intEl=document.getElementById(pk+'_int');
+    const ultEl=document.getElementById(pk+'_ult');
+    const naBtn=document.getElementById(pk+'_na');
+    const isNA=naBtn?.classList.contains('active')||false;
+
+    const acaoFinal=isNA?'na':acao;
+    const refAnterior=(_pgpLoadedMachine?.parts?.[aid]?.ref)||'';
+    const lastChange=parseInt(ultEl?.value)||0;
+
+    parts[aid]={
+      name:(base.parts[aid]?.name)||pt.k,
+      acao:acaoFinal,
+      ref:refEl?.value.trim()||'',
+      refAnterior,
+      interval:parseInt(intEl?.value)||pt.intDefault,
+      tipoReferencia:(()=>{
+        if(acaoFinal!=='trocada') return '';
+        const refNova=refEl?.value.trim()||'';
+        if(!refNova||!refAnterior) return 'manual';
+        return refNova===refAnterior?'original':'manual';
+      })(),
+      lastChange,
+      obs:(base.parts[aid]?.obs)||''
+    };
+  });
+
+  const visitId='VIS-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
+
+  return{
+    visit_id:visitId,
+    machine_id:base.machine_id,
+    serial:base.serial,
+    tag:base.tag,
+    client:base.client,
+    branch:base.branch,
+    brand:base.brand,
+    model:base.model,
+    visitDate:new Date().toISOString(),
+    hourTotal:base.hourTotal,
+    hpw:base.hpw,
+    tech:base.tech,
+    tipo:'preventiva',
+    scenario:base.scenario,
+    generalObs:base.generalObs,
+    parts
+  };
+}
+
+async function pgpEnviarPreventiva(){
+  const gv=key=>{
+    const el=document.querySelector(`[data-key="m0_${key}"]`);
+    return el?el.value.trim():'';
+  };
+  const hourTotal=parseInt(gv('horimetro'))||0;
+  if(!hourTotal){
+    showNotification('⚠ Informe o horímetro antes de registrar');
+    return;
+  }
+
+  let todasComAcao=true;
+  let algumaTrocadaSemRef=false;
+
+  PARTS.forEach(pt=>{
+    const pk='m0_'+pt.k;
+    const naBtn=document.getElementById(pk+'_na');
+    const isNA=naBtn?.classList.contains('active')||false;
+    if(isNA) return;
+
+    const acaoEl=document.getElementById(pk+'_acao');
+    const acao=acaoEl?acaoEl.value:'';
+    if(!acao){todasComAcao=false;return;}
+
+    if(acao==='trocada'){
+      const refEl=document.getElementById(pk+'_ref');
+      if(!refEl||!refEl.value.trim()) algumaTrocadaSemRef=true;
+    }
+  });
+
+  if(!todasComAcao){
+    showNotification('⚠ Selecione uma ação para todas as peças');
+    return;
+  }
+  if(algumaTrocadaSemRef){
+    showNotification('⚠ Informe a referência das peças marcadas como Trocada');
+    return;
+  }
+
+  const payload=pgpBuildPreventivaPayload();
+  const nTrocadas=Object.values(payload.parts).filter(p=>p.acao==='trocada').length;
+
+  pgpUpdateAdminLocal(payload);
+
+  const btn=document.querySelector('.btn-preventiva');
+  if(btn){btn.disabled=true;btn.textContent='Enviando...';}
+
+  if(!_pgpGsConnected){
+    const list=pgpGetPending();
+    list.push({action:'savePreventiva',body:payload,signature:payload.visit_id,ts:Date.now()});
+    localStorage.setItem(PENDING_KEY,JSON.stringify(list.slice(-30)));
+    pgpUpdatePendingBadge();
+    showNotification('📋 Preventiva salva na fila — enviada ao conectar');
+    if(btn){btn.disabled=false;btn.textContent='🔧 Registrar Preventiva';}
+    return;
+  }
+
+  try{
+    const r=await fetch(_pgpGsUrl,{
+      method:'POST',
+      body:JSON.stringify({action:'savePreventiva',key:_AUTH_HASH,...payload})
+    });
+    const txt=await r.text();
+    if(txt.trim().startsWith('<')) throw new Error('Resposta inválida do GAS');
+    const d=JSON.parse(txt);
+
+    if(d.duplicate){
+      showNotification('ℹ Esta preventiva já foi registrada');
+    } else if(d.status==='ok'){
+      showNotification('✅ Preventiva registrada — '+nTrocadas+' peça(s) atualizada(s)');
+      pgpSetTipoVisita('inspecao');
+    } else {
+      throw new Error(d.error||'Erro desconhecido');
+    }
+  }catch(e){
+    const list=pgpGetPending();
+    list.push({action:'savePreventiva',body:payload,signature:payload.visit_id,ts:Date.now()});
+    localStorage.setItem(PENDING_KEY,JSON.stringify(list.slice(-30)));
+    pgpUpdatePendingBadge();
+    showNotification('⏳ Falha — preventiva salva na fila');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🔧 Registrar Preventiva';}
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
