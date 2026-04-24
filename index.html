@@ -221,6 +221,7 @@
   .parts-obs-global{width:100%;border:1.5px solid var(--gray-mid);border-radius:7px;padding:7px 9px;font-family:'Barlow',sans-serif;font-size:13px;color:var(--text);background:var(--gray);outline:none;resize:none;min-height:44px;margin-top:6px}
   .parts-obs-global:focus{border-color:var(--blue-mid);background:white}
   .pt-table{width:100%;border-collapse:collapse;margin-bottom:6px}
+  .pt-table thead{position:sticky;top:0;z-index:10;background:#f9fafb}
   .pt-table thead th{font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-light);padding:5px 4px;border-bottom:2px solid var(--gray-mid);text-align:left;letter-spacing:.3px}
   .pt-table thead th.th-center{text-align:center}
   .pt-table tbody tr{border-bottom:1px solid #f0f2f5;cursor:pointer;transition:background .1s}
@@ -585,8 +586,6 @@
   Toque em cada item para expandir e preencher. Marque como coletado. Use <b>N/A</b> nas peças que não se aplicam. Para múltiplas máquinas no mesmo cliente, use <b>+ Máquina</b> (dados do cliente copiam automaticamente).
 </div>
 
-<div class="content" id="machineContent"></div>
-
 <div id="pgpTipoVisitaWrap" style="padding:10px 12px 0">
   <div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Tipo de visita</div>
   <div style="display:flex;gap:8px">
@@ -606,6 +605,8 @@
     Inspeção: coleta dados e gera relatório.
   </div>
 </div>
+
+<div class="content" id="machineContent"></div>
 
 <div class="actions">
   <button class="btn btn-reset" onclick="resetCurrent()">↺ Limpar</button>
