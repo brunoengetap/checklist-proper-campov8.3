@@ -379,6 +379,17 @@
   .pgp-loaded-info small{display:block;font-weight:400;font-size:11px;color:#1e5c33;opacity:.8}
   .pgp-loaded-clear{font-size:12px;padding:4px 8px;border:1.5px solid var(--green);border-radius:6px;background:white;color:var(--green);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;white-space:nowrap}
 
+  /* ── ETAPA 4 — FLUXO CLIENTE → MÁQUINA ── */
+  .pgp-step{padding:10px;margin-bottom:4px}
+  .pgp-step-label{font-size:12px;font-weight:700;color:var(--blue);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+  .pgp-machine-list{display:flex;flex-direction:column;gap:6px}
+  .pgp-machine-card{background:#fff;border:1.5px solid var(--gray-mid);border-radius:10px;padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s}
+  .pgp-machine-card:active{background:var(--blue-light)}
+  .pgp-machine-card-title{font-size:14px;font-weight:700;color:var(--text)}
+  .pgp-machine-card-sub{font-size:12px;color:var(--text-light);margin-top:2px}
+  .pgp-machine-card-new{background:#fff7ed;border:1.5px dashed var(--orange);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--orange);font-size:13px;font-weight:700;text-align:center}
+  .pgp-link-btn{background:none;border:none;cursor:pointer;font-size:12px;color:var(--blue-mid);padding:2px 0;font-family:inherit;text-decoration:underline}
+
   /* ── GS STATUS ── */
   .gs-pill-pgp{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.75);font-size:10px;font-family:'Barlow Condensed',sans-serif;padding:3px 8px;border-radius:14px;cursor:pointer;white-space:nowrap}
   .gs-dot-pgp{width:6px;height:6px;border-radius:50%;background:#6ee7b7;flex-shrink:0}
@@ -469,14 +480,54 @@
     <span class="pgp-banner-title">Carregar máquina do banco</span>
     <span style="font-size:10px;color:var(--blue);opacity:.7">opcional</span>
   </div>
-  <div class="pgp-search-row">
+  <!-- ETAPA 1: Selecionar cliente -->
+  <div id="pgpStep1" class="pgp-step">
+    <div class="pgp-step-label">1. Selecione o cliente</div>
+    <div class="pgp-autocomplete-wrap">
+      <input type="text" id="pgpClientInput" class="pgp-search-input"
+             placeholder="Digite o nome do cliente..."
+             oninput="pgpClientSearch()" onkeydown="pgpClientKey(event)"
+             autocomplete="off">
+      <div class="pgp-autocomplete-list" id="pgpClientAcList"></div>
+    </div>
+    <div id="pgpClientSearching"
+         style="display:none;font-size:12px;color:var(--text-light);padding:4px 0">
+      Buscando clientes...
+    </div>
+    <button class="pgp-link-btn" onclick="pgpClientSearchFallback()"
+            style="margin-top:8px">
+      Buscar por série ou TAG →
+    </button>
+  </div>
+
+  <!-- ETAPA 2: Selecionar máquina -->
+  <div id="pgpStep2" class="pgp-step" style="display:none">
+    <div class="pgp-step-label">
+      2. Selecione a máquina
+      <span id="pgpStep2Client" style="font-weight:400;color:var(--text-light)"></span>
+    </div>
+    <div id="pgpMachineList" class="pgp-machine-list"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="pgp-link-btn" onclick="pgpBackToStep1()">
+        ← Trocar cliente
+      </button>
+    </div>
+  </div>
+
+  <!-- FALLBACK: busca livre (original, oculta por padrão) -->
+  <div id="pgpStepFallback" style="display:none" class="pgp-step">
+    <div class="pgp-step-label">Busca por série ou TAG</div>
     <div class="pgp-autocomplete-wrap">
       <input type="text" id="pgpSearchInput" class="pgp-search-input"
              placeholder="N° série, TAG ou cliente..."
-             oninput="pgpOnInput()" onkeydown="pgpOnKey(event)" autocomplete="off">
+             oninput="pgpOnInput()" onkeydown="pgpOnKey(event)"
+             autocomplete="off">
       <div class="pgp-autocomplete-list" id="pgpAcList"></div>
     </div>
-    <button class="pgp-search-btn" onclick="pgpDoSearch()">Buscar</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="pgp-search-btn" onclick="pgpDoSearch()">Buscar</button>
+      <button class="pgp-link-btn" onclick="pgpBackToStep1()">← Voltar</button>
+    </div>
   </div>
   <div id="pgpLastClientsWrap" class="pgp-last-clients" style="display:none">
     <span class="pgp-last-label">Recentes</span>
@@ -3408,8 +3459,8 @@ function pgpRenderLastClients(){
     last.map(c=>`<button class="pgp-chip" onclick="pgpQuickSearch('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
 }
 function pgpQuickSearch(name){
-  document.getElementById('pgpSearchInput').value=name;
-  pgpHideAc();pgpDoSearch();
+  pgpBackToStep1();
+  pgpSelectClient(name);
 }
 
 function pgpGetLocalMachines(){
@@ -3522,9 +3573,200 @@ function pgpLoadMachine(eq,localDb){
 function pgpClearMachine(){
   _pgpLoadedMachine=null;
   document.getElementById('pgpLoadedCard').classList.remove('show');
-  document.getElementById('pgpFound').classList.remove('show');
-  document.getElementById('pgpSearchInput').value='';
+  pgpBackToStep1();
 }
+
+// ── ETAPA 4 — FLUXO CLIENTE → MÁQUINA ────────────────────────────────────
+
+function pgpBackToStep1(){
+  const s1=document.getElementById('pgpStep1');
+  const s2=document.getElementById('pgpStep2');
+  const sf=document.getElementById('pgpStepFallback');
+  if(s2) s2.style.display='none';
+  if(sf) sf.style.display='none';
+  if(s1) s1.style.display='';
+  const ci=document.getElementById('pgpClientInput');
+  if(ci) ci.value='';
+  const ac=document.getElementById('pgpClientAcList');
+  if(ac) ac.style.display='none';
+  document.getElementById('pgpFound').classList.remove('show');
+  document.getElementById('pgpNotFound').classList.remove('show');
+  document.getElementById('pgpNewMachine').classList.remove('show');
+}
+
+async function pgpClientSearch(){
+  const q=(document.getElementById('pgpClientInput').value||'').trim();
+  const acList=document.getElementById('pgpClientAcList');
+  if(q.length<2){acList.style.display='none';return;}
+
+  const norm=v=>String(v||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+  // 1. Buscar no localStorage (imediato)
+  const localClients=[...new Set(
+    pgpGetLocalMachines().map(m=>m.client).filter(Boolean)
+  )].filter(c=>norm(c).includes(norm(q))).slice(0,8);
+
+  // 2. Buscar no GAS se conectado
+  let serverClients=[];
+  if(_pgpGsConnected&&_pgpGsUrl){
+    try{
+      const r=await fetch(_pgpGsUrl+'?action=getClientsForField&key='+_AUTH_HASH);
+      const d=await r.json();
+      if(d.status==='ok') serverClients=(d.clients||[]).filter(c=>norm(c).includes(norm(q)));
+    }catch(e){}
+  }
+
+  const allClients=[...new Set([...localClients,...serverClients])].slice(0,10);
+  if(!allClients.length){acList.style.display='none';return;}
+
+  acList.style.display='block';
+  acList.innerHTML=allClients.map(c=>
+    `<div class="pgp-ac-item" onclick="pgpSelectClient('${c.replace(/'/g,"\\'")}')">
+       <span class="pgp-ac-main">${c}</span>
+     </div>`
+  ).join('');
+}
+
+function pgpClientKey(e){
+  if(e.key==='Enter'){
+    const q=(document.getElementById('pgpClientInput').value||'').trim();
+    if(q) pgpSelectClient(q);
+  }
+  if(e.key==='Escape'){
+    document.getElementById('pgpClientAcList').style.display='none';
+  }
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#pgpClientInput')&&!e.target.closest('#pgpClientAcList')){
+    const ac=document.getElementById('pgpClientAcList');
+    if(ac) ac.style.display='none';
+  }
+});
+
+async function pgpSelectClient(name){
+  const ac=document.getElementById('pgpClientAcList');
+  if(ac) ac.style.display='none';
+  const ci=document.getElementById('pgpClientInput');
+  if(ci) ci.value=name;
+
+  document.getElementById('pgpStep1').style.display='none';
+  document.getElementById('pgpStep2').style.display='';
+  document.getElementById('pgpStep2Client').textContent=' — '+name;
+  document.getElementById('pgpMachineList').innerHTML=
+    '<div style="font-size:12px;color:var(--text-light);padding:8px 0">Buscando máquinas...</div>';
+
+  pgpSaveLastClient(name);
+  pgpRenderLastClients();
+  await pgpFetchMachinesByClient(name);
+}
+
+async function pgpFetchMachinesByClient(client){
+  const listEl=document.getElementById('pgpMachineList');
+  if(!listEl) return;
+  const norm=v=>String(v||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+  // 1. Buscar no localStorage
+  const localMachines=pgpGetLocalMachines().filter(m=>norm(m.client)===norm(client));
+
+  // 2. Buscar no GAS se conectado
+  let serverMachines=[];
+  if(_pgpGsConnected&&_pgpGsUrl){
+    try{
+      const r=await fetch(
+        _pgpGsUrl+'?action=getMachinesByClient'+
+        '&client='+encodeURIComponent(client)+
+        '&key='+_AUTH_HASH
+      );
+      const d=await r.json();
+      if(d.status==='ok') serverMachines=d.machines||[];
+    }catch(e){}
+  }
+
+  // Mesclar: server é fonte de verdade, local complementa
+  const seen=new Set();
+  const machines=[];
+  [...serverMachines,...localMachines].forEach(m=>{
+    const key=m.id||m.serial||m.tag;
+    if(!key||seen.has(key)) return;
+    seen.add(key);
+    machines.push(m);
+  });
+
+  if(!machines.length){
+    listEl.innerHTML=
+      '<div style="font-size:12px;color:var(--text-light);padding:4px 0">Nenhuma máquina encontrada para este cliente.</div>'+
+      pgpMachineCardNew(client);
+    return;
+  }
+  listEl.innerHTML=machines.map(m=>pgpMachineCardHtml(m)).join('')+pgpMachineCardNew(client);
+}
+
+function pgpMachineCardHtml(m){
+  const safeJson=JSON.stringify(m).replace(/'/g,"&#39;");
+  const hour=(m.hourTotal||0).toLocaleString('pt-BR');
+  return `<div class="pgp-machine-card"
+               onclick='pgpSelectClientMachine(${safeJson})'>
+    <div class="pgp-machine-card-title">${m.brand||''} ${m.model||''}</div>
+    <div class="pgp-machine-card-sub">
+      S/N: ${m.serial||'—'} · TAG: ${m.tag||'—'} · ${hour}h${m.location?' · '+m.location:''}
+    </div>
+  </div>`;
+}
+
+function pgpMachineCardNew(client){
+  const safe=client.replace(/'/g,"\\'");
+  return `<div class="pgp-machine-card-new"
+               onclick="pgpNewMachineForClient('${safe}')">
+    + Esta máquina não está na lista
+  </div>`;
+}
+
+function pgpSelectClientMachine(eq){
+  const localDb=pgpGetLocalMachines();
+  const norm=v=>String(v||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  let found=null;
+
+  // 1. Por machineKey
+  if(eq.id) found=localDb.find(m=>m.id===eq.id);
+  // 2. Por cliente + série
+  if(!found&&eq.serial&&eq.client)
+    found=localDb.find(m=>norm(m.client)===norm(eq.client)&&norm(m.serial)===norm(eq.serial));
+  // 3. Por cliente + TAG
+  if(!found&&eq.tag&&eq.client)
+    found=localDb.find(m=>norm(m.client)===norm(eq.client)&&norm(m.tag)===norm(eq.tag));
+
+  const machineToLoad=found||eq;
+
+  document.getElementById('pgpStep1').style.display='none';
+  document.getElementById('pgpStep2').style.display='none';
+
+  document.getElementById('pgpFound').textContent=
+    '✓ Carregado: '+machineToLoad.brand+' '+machineToLoad.model+' — '+machineToLoad.client;
+  document.getElementById('pgpFound').classList.add('show');
+
+  try{
+    const fullDb=JSON.parse(localStorage.getItem('proper_admin_v2')||'null');
+    pgpLoadMachine(machineToLoad,fullDb);
+  }catch(e){
+    pgpLoadMachine(machineToLoad,null);
+  }
+}
+
+function pgpNewMachineForClient(client){
+  document.getElementById('pgpStep2').style.display='none';
+  document.getElementById('nm_client').value=client;
+  document.getElementById('pgpNewMachine').classList.add('show');
+  document.getElementById('pgpNotFound').classList.remove('show');
+}
+
+function pgpClientSearchFallback(){
+  document.getElementById('pgpStep1').style.display='none';
+  document.getElementById('pgpStepFallback').style.display='';
+  document.getElementById('pgpSearchInput').focus();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function pgpRegisterNew(){
   const client=document.getElementById('nm_client').value.trim();
