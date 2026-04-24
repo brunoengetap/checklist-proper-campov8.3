@@ -216,12 +216,12 @@
   .sc-btn.active .sc-title{color:var(--blue)}
 
   /* tabela de peças */
-  .parts-table-wrap{padding:0 12px 10px;display:none}
+  .parts-table-wrap{padding:0 12px 10px;display:none;position:relative}
   .parts-table-wrap.visible{display:block}
   .parts-obs-global{width:100%;border:1.5px solid var(--gray-mid);border-radius:7px;padding:7px 9px;font-family:'Barlow',sans-serif;font-size:13px;color:var(--text);background:var(--gray);outline:none;resize:none;min-height:44px;margin-top:6px}
   .parts-obs-global:focus{border-color:var(--blue-mid);background:white}
   .pt-table{width:100%;border-collapse:collapse;margin-bottom:6px}
-  .pt-table thead{position:sticky;top:0;z-index:10;background:#f9fafb}
+  .pt-table thead{position:sticky;top:0;z-index:5;background:#f0f4fa}
   .pt-table thead th{font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-light);padding:5px 4px;border-bottom:2px solid var(--gray-mid);text-align:left;letter-spacing:.3px}
   .pt-table thead th.th-center{text-align:center}
   .pt-table tbody tr{border-bottom:1px solid #f0f2f5;cursor:pointer;transition:background .1s}
@@ -394,8 +394,10 @@
   /* ── ETAPA 5 — REGISTRAR PREVENTIVA ── */
   .pgp-tipo-btn{flex:1;padding:10px 8px;border:1.5px solid var(--gray-mid);border-radius:8px;background:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s}
   .pgp-tipo-btn-active{background:var(--blue);color:white;border-color:var(--blue)}
-  .pgp-acao-col{min-width:110px}
-  .pgp-acao-sel{width:100%;font-size:12px;padding:4px 6px;border:1px solid var(--gray-mid);border-radius:6px;background:#fff;font-family:inherit}
+  .pgp-acao-wrap{margin-bottom:10px}
+  .pgp-acao-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--blue);display:block;margin-bottom:6px}
+  .pgp-acao-pill{flex:1;padding:8px 4px;border:1.5px solid var(--gray-mid);border-radius:8px;background:#fff;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s}
+  .pgp-acao-pill.active{background:var(--blue);color:white;border-color:var(--blue)}
   .pgp-prev-actions{padding:10px 12px 0;display:flex;gap:10px}
   .btn-preventiva{flex:1;background:var(--blue);color:white;border:none;border-radius:10px;padding:14px 12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px}
 
@@ -963,20 +965,25 @@ function buildPartsTable(p, midx, scenario) {
       <td class="pt-name">${pt.label}<small>Padrão: ${pt.intDefault}h</small>${hiddenFields}</td>
       ${mainCell}
       ${extraCols}
-      <td class="pgp-acao-col" style="display:none">
-        <select class="pgp-acao-sel" id="${pk}_acao" onclick="event.stopPropagation()">
-          <option value="">—</option>
-          <option value="conferida">Conferida</option>
-          <option value="trocada">Trocada</option>
-          <option value="na">N/A</option>
-        </select>
-      </td>
       <td class="td-na"><button class="btn-pt-na" id="${pk}_na" onclick="togglePtNA('${pk}',event)">N/A</button></td>
       <td class="td-detail"><button class="btn-pt-detail" id="${pk}_detail_btn" onclick="togglePartDetail('${pk}',${pt.intDefault},event)">▸</button></td>
     </tr>
     <tr class="pt-detail-row" id="${pk}_detail_row" style="display:none">
       <td colspan="10">
         <div class="pt-detail-box">
+          <div class="pgp-acao-wrap" id="${pk}_acao_wrap"
+               style="display:${_pgpTipoVisita==='preventiva'?'':'none'}">
+            <label class="pgp-acao-label">Ação desta peça</label>
+            <div style="display:flex;gap:8px">
+              <button class="pgp-acao-pill" id="${pk}_acao_conferida"
+                      onclick="pgpSetAcao('${pk}','conferida')">Conferida</button>
+              <button class="pgp-acao-pill" id="${pk}_acao_trocada"
+                      onclick="pgpSetAcao('${pk}','trocada')">Trocada</button>
+              <button class="pgp-acao-pill" id="${pk}_acao_na"
+                      onclick="pgpSetAcao('${pk}','na')">N/A</button>
+            </div>
+            <input type="hidden" id="${pk}_acao" value="">
+          </div>
           <div class="pt-detail-grid">
             <div class="pt-det-field">
               <label>Histórico</label>
@@ -1043,7 +1050,6 @@ function buildPartsTable(p, midx, scenario) {
     <thead><tr>
       <th>${cfg.heads[0]}</th>
       ${thExtra}
-      <th class="pgp-acao-col th-center" style="display:none">Ação</th>
       <th class="th-center">N/A</th>
       <th class="th-center">▸</th>
     </tr></thead>
@@ -3828,12 +3834,29 @@ function pgpSetTipoVisita(tipo){
     ?'Preventiva: registra peças trocadas e atualiza histórico.'
     :'Inspeção: coleta dados e gera relatório.';
 
-  document.querySelectorAll('.pgp-acao-col').forEach(el=>{
+  document.querySelectorAll('.pgp-acao-wrap').forEach(el=>{
     el.style.display=tipo==='preventiva'?'':'none';
   });
+  if(tipo==='inspecao'){
+    document.querySelectorAll('[id$="_acao"]').forEach(el=>{
+      if(el.type==='hidden') el.value='';
+    });
+    document.querySelectorAll('.pgp-acao-pill').forEach(btn=>{
+      btn.classList.remove('active');
+    });
+  }
 
   const prevWrap=document.getElementById('pgpPrevActionsWrap');
   if(prevWrap) prevWrap.style.display=tipo==='preventiva'?'':'none';
+}
+
+function pgpSetAcao(pk, acao){
+  const hidden=document.getElementById(pk+'_acao');
+  if(hidden) hidden.value=acao;
+  ['conferida','trocada','na'].forEach(a=>{
+    const btn=document.getElementById(pk+'_acao_'+a);
+    if(btn) btn.classList.toggle('active', a===acao);
+  });
 }
 
 function pgpBuildPreventivaPayload(){
